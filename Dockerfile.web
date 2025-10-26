@@ -1,0 +1,21 @@
+# Use Python 3.11 slim image as base
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy web server script
+COPY web_server.py .
+
+# Create static directory
+RUN mkdir -p static/figures
+
+# Expose port
+EXPOSE 8002
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV WEB_PORT=8002
+
+# Run the web server
+CMD ["python", "web_server.py"]

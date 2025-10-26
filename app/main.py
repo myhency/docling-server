@@ -6,10 +6,9 @@ from typing import Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, status
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import UPLOAD_DIR, STATIC_DIR, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE
+from app.config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_UPLOAD_SIZE, WEB_SERVER_URL
 from app.converter import create_converter
 
 # Create FastAPI app
@@ -27,9 +26,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount static files directory
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Initialize converter
 converter_service = create_converter()
@@ -197,36 +193,6 @@ async def convert_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     return JSONResponse(content=response, status_code=status.HTTP_200_OK)
 
 
-@app.delete("/figures/{figure_filename}")
-async def delete_figure(figure_filename: str):
-    """
-    Delete a specific figure file.
-
-    Args:
-        figure_filename: Name of the figure file to delete
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: If file not found or deletion fails
-    """
-    figure_path = STATIC_DIR / "figures" / figure_filename
-
-    if not figure_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Figure not found"
-        )
-
-    try:
-        figure_path.unlink()
-        return {"status": "success", "message": f"Figure {figure_filename} deleted"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete figure: {str(e)}"
-        )
 
 
 if __name__ == "__main__":

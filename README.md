@@ -27,16 +27,26 @@ Docling을 기반으로 한 REST API 서버로, Office 문서를 Markdown으로 
 # 저장소 클론 또는 프로젝트 디렉토리로 이동
 cd docling-server
 
-# Docker Compose로 서버 시작
+# Docker Compose로 두 서버 모두 시작
 docker-compose up -d
+
+# 또는 개별적으로 시작
+docker-compose up -d docling-api  # REST API 서버만
+docker-compose up -d docling-web  # 웹 서버만
 ```
 
-서버가 시작되면 `http://localhost:8000`에서 접근할 수 있습니다.
+서버가 시작되면:
+- **REST API 서버**: `http://localhost:8001`
+- **웹 서버 (이미지 제공)**: `http://localhost:8002`
 
 ### 2. 상태 확인
 
 ```bash
-curl http://localhost:8000/health
+# REST API 서버 상태 확인
+curl http://localhost:8001/health
+
+# 웹 서버 상태 확인
+curl http://localhost:8002/
 ```
 
 응답:
@@ -66,7 +76,7 @@ curl http://localhost:8000/health
 ```bash
 curl -X POST \
   -F "file=@document.pdf" \
-  http://localhost:8000/convert/markdown
+  http://localhost:8001/convert/markdown
 ```
 
 **응답 예시**:
@@ -90,7 +100,7 @@ curl -X POST \
 ```bash
 curl -X POST \
   -F "file=@document.pdf" \
-  http://localhost:8000/convert/with-images
+  http://localhost:8001/convert/with-images
 ```
 
 **응답 예시**:
@@ -98,13 +108,13 @@ curl -X POST \
 {
   "status": "success",
   "original_filename": "document.pdf",
-  "markdown": "![Figure 1](http://localhost:8000/static/figures/document_figure_0_abc123.png)\n\n## 문서 제목\n\n본문 내용...",
+  "markdown": "![Figure 1](http://localhost:8002/figures/document_figure_0_abc123.png)\n\n## 문서 제목\n\n본문 내용...",
   "figures": [
     {
       "id": "abc123",
       "filename": "document_figure_0_abc123.png",
       "path": "/app/static/figures/document_figure_0_abc123.png",
-      "url": "http://localhost:8000/static/figures/document_figure_0_abc123.png",
+      "url": "http://localhost:8002/figures/document_figure_0_abc123.png",
       "type": "image",
       "caption": "Figure 1"
     }
@@ -121,7 +131,7 @@ import requests
 # 방법 1: Markdown만 빠르게 변환
 with open('document.pdf', 'rb') as f:
     files = {'file': f}
-    response = requests.post('http://localhost:8000/convert/markdown', files=files)
+    response = requests.post('http://localhost:8001/convert/markdown', files=files)
 
 result = response.json()
 print(f"변환 상태: {result['status']}")
@@ -130,7 +140,7 @@ print(f"\nMarkdown 내용:\n{result['markdown']}")
 # 방법 2: 이미지 추출과 함께 변환
 with open('document.pdf', 'rb') as f:
     files = {'file': f}
-    response = requests.post('http://localhost:8000/convert/with-images', files=files)
+    response = requests.post('http://localhost:8001/convert/with-images', files=files)
 
 result = response.json()
 print(f"변환 상태: {result['status']}")
@@ -153,7 +163,7 @@ const axios = require('axios');
 const form1 = new FormData();
 form1.append('file', fs.createReadStream('document.pdf'));
 
-axios.post('http://localhost:8000/convert/markdown', form1, {
+axios.post('http://localhost:8001/convert/markdown', form1, {
     headers: form1.getHeaders()
 })
 .then(response => {
@@ -169,7 +179,7 @@ axios.post('http://localhost:8000/convert/markdown', form1, {
 const form2 = new FormData();
 form2.append('file', fs.createReadStream('document.pdf'));
 
-axios.post('http://localhost:8000/convert/with-images', form2, {
+axios.post('http://localhost:8001/convert/with-images', form2, {
     headers: form2.getHeaders()
 })
 .then(response => {
@@ -193,19 +203,19 @@ axios.post('http://localhost:8000/convert/with-images', form2, {
 # Markdown만 빠르게 변환하여 저장
 curl -X POST \
   -F "file=@document.pdf" \
-  http://localhost:8000/convert/markdown \
+  http://localhost:8001/convert/markdown \
   | jq -r '.markdown' > output.md
 
 # 이미지 추출과 함께 변환하여 JSON으로 저장
 curl -X POST \
   -F "file=@document.pdf" \
-  http://localhost:8000/convert/with-images \
+  http://localhost:8001/convert/with-images \
   -o result.json
 
 # 이미지 추출과 함께 변환하여 Markdown만 저장
 curl -X POST \
   -F "file=@document.pdf" \
-  http://localhost:8000/convert/with-images \
+  http://localhost:8001/convert/with-images \
   | jq -r '.markdown' > output.md
 ```
 
@@ -240,15 +250,36 @@ docling-server/
 └── README.md
 ```
 
+## 아키텍처
+
+이 프로젝트는 두 개의 독립적인 서버로 구성됩니다:
+
+1. **REST API 서버** (포트 8001)
+   - 문서 변환 로직 처리
+   - Markdown 생성
+   - 이미지 추출 및 저장
+
+2. **웹 서버** (포트 8002)
+   - 정적 파일 (이미지) 제공
+   - CORS 지원
+
+두 서버는 공유 볼륨을 통해 figures 디렉토리를 공유합니다.
+
 ## 환경 변수
 
 `docker-compose.yaml` 또는 `.env` 파일에서 다음 환경 변수를 설정할 수 있습니다:
 
+### API 서버
 | 변수 | 기본값 | 설명 |
 |-----|--------|------|
 | `API_HOST` | `0.0.0.0` | API 서버 호스트 |
-| `API_PORT` | `8000` | API 서버 포트 |
-| `SERVER_URL` | `http://localhost:8000` | 이미지 URL 생성시 사용할 서버 URL |
+| `API_PORT` | `8001` | API 서버 포트 |
+| `WEB_SERVER_URL` | `http://localhost:8002` | 웹 서버 URL (이미지 URL 생성에 사용) |
+
+### 웹 서버
+| 변수 | 기본값 | 설명 |
+|-----|--------|------|
+| `WEB_PORT` | `8002` | 웹 서버 포트 |
 
 ## 개발 모드
 
@@ -330,8 +361,8 @@ docling[easyocr]==2.10.0
 
 서버 실행 후 다음 URL에서 자동 생성된 API 문서를 확인할 수 있습니다:
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8001/docs
+- ReDoc: http://localhost:8001/redoc
 
 ## 라이선스
 

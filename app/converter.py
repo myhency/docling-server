@@ -161,7 +161,7 @@ class DocumentConverterService:
                     'id': figure_id,
                     'filename': filename,
                     'path': str(file_path),
-                    'url': f"{SERVER_URL}/static/figures/{filename}",
+                    'url': f"{SERVER_URL}/figures/{filename}",
                     'type': 'image',
                     'caption': caption
                 }

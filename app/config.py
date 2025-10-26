@@ -14,7 +14,10 @@ FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # API settings
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("API_PORT", "8000"))
+API_PORT = int(os.getenv("API_PORT", "8001"))
+
+# Web server settings (for static files)
+WEB_SERVER_URL = os.getenv("WEB_SERVER_URL", "http://localhost:8002")
 
 # File upload settings
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
@@ -24,5 +27,5 @@ ALLOWED_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".webp"
 }
 
-# Server URL for generating figure URLs
-SERVER_URL = os.getenv("SERVER_URL", f"http://localhost:{API_PORT}")
+# Server URL for generating figure URLs (now points to web server)
+SERVER_URL = WEB_SERVER_URL

@@ -1,24 +1,56 @@
 version: '3.8'
 
 services:
-  docling-server:
-    build: .
-    container_name: docling-converter
+  # REST API Server (Port 8001)
+  docling-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: docling-api
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
-      # Persist uploaded figures
+      # Share figures directory with web server (bind mount to local folder)
       - ./static/figures:/app/static/figures
       # Optional: Mount for development (uncomment for live reload)
       # - ./app:/app/app
     environment:
       - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - SERVER_URL=http://localhost:8000
+      - API_PORT=8001
+      - WEB_SERVER_URL=http://localhost:8002
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - docling-network
+
+  # Web Server for Static Files (Port 8002)
+  docling-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: docling-web
+    ports:
+      - "8002:8002"
+    volumes:
+      # Share figures directory with API server (bind mount to local folder)
+      - ./static/figures:/app/static/figures
+    environment:
+      - WEB_PORT=8002
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - docling-network
+
+networks:
+  docling-network:
+    driver: bridge
