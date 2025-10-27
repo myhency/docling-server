@@ -38,17 +38,25 @@ class DocumentConverterService:
         )
         self.figures_dir = FIGURES_DIR
 
-    def convert_document(self, file_path: Path, original_filename: str, extract_images: bool = True) -> Tuple[str, List[Dict[str, str]]]:
+    def convert_document(
+        self,
+        file_path: Path,
+        original_filename: str,
+        extract_images: bool = True,
+        output_format: str = "markdown"
+    ) -> Tuple[str, List[Dict[str, str]]]:
         """
-        Convert a document to Markdown and optionally extract figures.
+        Convert a document to Markdown or HTML and optionally extract figures.
 
         Args:
             file_path: Path to the input document
             original_filename: Original filename for reference
             extract_images: Whether to extract and save images (default: True)
+            output_format: Output format - "markdown" or "html" (default: "markdown")
 
         Returns:
-            Tuple of (markdown_content, list of figure info dicts)
+            Tuple of (content, list of figure info dicts)
+            content is markdown or html based on output_format
         """
         # Convert the document
         result = self.converter.convert(file_path)
@@ -62,13 +70,20 @@ class DocumentConverterService:
         figures_info = []
         if extract_images:
             figures_info = self._extract_figures(doc, original_filename)
-            # Generate markdown with figure references
-            markdown = self._generate_markdown_with_figures(doc, figures_info)
-        else:
-            # Just export to markdown without image extraction
-            markdown = doc.export_to_markdown()
 
-        return markdown, figures_info
+            # Generate content with figure references based on format
+            if output_format.lower() == "html":
+                content = self._generate_html_with_figures(doc, figures_info)
+            else:
+                content = self._generate_markdown_with_figures(doc, figures_info)
+        else:
+            # Export without image extraction
+            if output_format.lower() == "html":
+                content = doc.export_to_html()
+            else:
+                content = doc.export_to_markdown()
+
+        return content, figures_info
 
     def _extract_figures(self, doc, original_filename: str) -> List[Dict[str, str]]:
         """
@@ -161,7 +176,7 @@ class DocumentConverterService:
                     'id': figure_id,
                     'filename': filename,
                     'path': str(file_path),
-                    'url': f"{SERVER_URL}/figures/{filename}",
+                    'url': f"{SERVER_URL}/images/{filename}",
                     'type': 'image',
                     'caption': caption
                 }
@@ -200,6 +215,85 @@ class DocumentConverterService:
             markdown = markdown.replace('<!-- image -->', img_markdown, 1)
 
         return markdown
+
+    def _generate_html_with_figures(self, doc, figures_info: List[Dict[str, str]]) -> str:
+        """
+        Generate HTML content with figure references maintaining original position.
+
+        Since Docling's HTML export doesn't preserve image positions like Markdown does,
+        we use Markdown as an intermediate format and convert it to HTML.
+
+        Args:
+            doc: DoclingDocument instance
+            figures_info: List of figure information dicts
+
+        Returns:
+            HTML string with figure references at correct positions
+        """
+        # First get markdown with figures (which preserves positions)
+        markdown = self._generate_markdown_with_figures(doc, figures_info)
+
+        # Convert markdown to HTML manually with proper image positioning
+        # Start with Docling's base HTML for styling
+        base_html = doc.export_to_html()
+
+        # Extract just the CSS from base HTML
+        css_start = base_html.find('<style>')
+        css_end = base_html.find('</style>') + 8 if base_html.find('</style>') != -1 else -1
+        css = base_html[css_start:css_end] if css_start != -1 and css_end != -1 else ''
+
+        # Convert markdown to HTML
+        import re
+
+        # Escape HTML special characters in markdown (except image tags)
+        html_body = markdown
+
+        # Convert markdown images to HTML images (preserve position!)
+        # ![caption](url) -> <figure><img src="url" alt="caption" /><figcaption>caption</figcaption></figure>
+        html_body = re.sub(
+            r'!\[([^\]]*)\]\(([^)]+)\)',
+            r'<figure class="document-figure"><img src="\2" alt="\1" title="\1" style="max-width: 100%; height: auto;" /><figcaption>\1</figcaption></figure>',
+            html_body
+        )
+
+        # Convert markdown headers to HTML
+        html_body = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html_body, flags=re.MULTILINE)
+        html_body = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_body, flags=re.MULTILINE)
+        html_body = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html_body, flags=re.MULTILINE)
+
+        # Convert double line breaks to paragraphs
+        paragraphs = html_body.split('\n\n')
+        html_paragraphs = []
+        for para in paragraphs:
+            para = para.strip()
+            if para:
+                # Don't wrap figures and headers in <p> tags
+                if para.startswith('<figure') or para.startswith('<h1>') or para.startswith('<h2>') or para.startswith('<h3>'):
+                    html_paragraphs.append(para)
+                else:
+                    # Replace single line breaks with <br> within paragraphs
+                    para = para.replace('\n', '<br>\n')
+                    html_paragraphs.append(f'<p>{para}</p>')
+
+        html_body = '\n'.join(html_paragraphs)
+
+        # Build final HTML with CSS from Docling and converted body
+        html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<title>Document</title>
+<meta name="generator" content="Docling HTML Serializer"/>
+{css}
+</head>
+<body>
+<div class='page'>
+{html_body}
+</div>
+</body>
+</html>'''
+
+        return html
 
 
 def create_converter() -> DocumentConverterService:
